@@ -1,238 +1,145 @@
-# 🏆 재활용품 이미지 기반 VQA 모델 | 193팀 중 전국 1위
+# Recycle VQA Challenge
 
-삼성 청년 SW/AI 아카데미 SSAFY 15기 2회차 AI 챌린지에서 재활용품 이미지 기반 질의응답(VQA) 모델을 개발해 193팀 중 전국 1위를 달성한 최종 솔루션입니다.
+재활용품 이미지, 자연어 질문, 4지선다 보기를 함께 해석해 정답을 선택하는
+multimodal VQA 프로젝트입니다. SSAFY 15기 2회차 AI Challenge에서
+**Private score 0.97635, 193개 팀 중 1위, 최우수상**을 기록했습니다.
 
-이 프로젝트는 이미지, 질문, 4지선다 보기(a, b, c, d)가 주어졌을 때 이미지 속 단서를 근거로 정답 보기를 예측합니다. 단순한 이미지 분류가 아니라 질문 의도를 해석하고, 보기 간 차이를 비교하며, 모델이 불확실한 샘플만 추가 분석하는 하이브리드 파이프라인으로 구성했습니다.
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-training-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)
+![Qwen](https://img.shields.io/badge/Qwen-LoRA%20%2F%20QLoRA-6F55E8?style=flat-square)
+![InternVL](https://img.shields.io/badge/InternVL-comparison-0B7285?style=flat-square)
+![Grounding DINO](https://img.shields.io/badge/Grounding%20DINO-detection-2F9E44?style=flat-square)
+
+[전체 포트폴리오](https://github.com/JuHyeon-Nam/JuHyeon-Nam-archive)
+
+## Result
 
 <p align="center">
-  <img src="assets/award_ceremony.jpg" alt="SSAFY AI Challenge 최우수상 수상 사진" width="100%">
+  <img src="assets/award_ceremony.jpg" alt="SSAFY AI Challenge award ceremony" width="820">
 </p>
 
-<p align="center">
-  <strong>SSAFY AI Challenge 최우수상</strong><br>
-  193팀이 경쟁한 재활용품 VQA 챌린지에서 Private leaderboard 기준 최종 1위를 기록했습니다.
-</p>
+| Private leaderboard | Public leaderboard |
+|---|---|
+| ![Private leaderboard](assets/leaderboard_private.png) | ![Public leaderboard](assets/leaderboard_public.png) |
 
-## 프로젝트 요약
+| Split | Rank | Score |
+|---|---:|---:|
+| Private | 1st | `0.97635` |
+| Public | 1st | `0.96452` |
 
-<table>
-  <tbody>
-    <tr>
-      <th align="left" width="140" nowrap="nowrap"><nobr>대회</nobr></th>
-      <td>SSAFY 15기 2회차 AI 챌린지</td>
-    </tr>
-    <tr>
-      <th align="left" width="140" nowrap="nowrap"><nobr>참가 규모</nobr></th>
-      <td>193팀</td>
-    </tr>
-    <tr>
-      <th align="left" width="140" nowrap="nowrap"><nobr>프로젝트 주제</nobr></th>
-      <td>재활용품 이미지 기반 질의응답(VQA) 모델 개발</td>
-    </tr>
-    <tr>
-      <th align="left" width="140" nowrap="nowrap"><nobr>입력 형식</nobr></th>
-      <td>이미지 + 자연어 질문 + 4지선다 보기(a, b, c, d)</td>
-    </tr>
-    <tr>
-      <th align="left" width="140" nowrap="nowrap"><nobr>최종 성과</nobr></th>
-      <td><strong>193팀 중 전국 1위</strong></td>
-    </tr>
-    <tr>
-      <th align="left" width="140" nowrap="nowrap"><nobr>핵심 전략</nobr></th>
-      <td>Qwen LoRA 파인튜닝, 선택지 순서 TTA, confidence/margin 기반 앙상블, DINO/SAM 재추론, Qwen/InternVL qtype별 가중 앙상블</td>
-    </tr>
-  </tbody>
-</table>
+## Problem
 
-## 최종 리더보드
+각 sample은 `image`, `question`, `a/b/c/d choices`로 구성되며 최종 출력은 하나의
+선택지입니다. 단순 이미지 분류와 달리 질문이 요구하는 속성, 작은 객체의 위치·개수,
+보기 사이의 의미 차이를 함께 해석해야 합니다.
 
-대회 종료 후 최종 순위를 반영하는 Private leaderboard에서 193팀 중 1위를 기록했습니다.
+주요 실패 조건은 다음과 같았습니다.
 
-| Leaderboard | Rank | Score | Entries |
-| --- | ---: | ---: | ---: |
-| Private | 1st | 0.97635 | 54 |
-| Public | 1st | 0.96452 | 54 |
+- 오답인데도 confidence가 높아 단일 점수만으로 오류를 거르기 어려움
+- `count`, `location` 유형에서 작은 객체를 놓치는 오류 집중
+- 모든 sample을 대형 모델로 재추론하면 GPU 시간과 비용 증가
+- 보기 순서에 따라 예측이 흔들리는 label-position bias 발생
 
-### Private Leaderboard
+## My Contribution
 
-![Private leaderboard rank 1](assets/leaderboard_private.png)
+남주현은 팀원으로 다음 분석과 판단 기준 정리를 담당했습니다.
 
-### Public Leaderboard
+- 주요 오답 pattern 정리
+- InternVL 비교 실험
+- 질문 유형별 성능 분석과 분류 기준 정리
+- Qwen과 InternVL의 유형별 강점·약점 비교
+- 낮은 confidence와 작은 top-1/top-2 margin을 함께 보는 재검토 기준 논의
 
-![Public leaderboard rank 1](assets/leaderboard_public.png)
+Qwen 학습, Grounding DINO·SAM 적용, 최종 pipeline 통합은 팀 전체 결과이며
+개인 단독 구현으로 표현하지 않습니다.
 
-## 팀 구성
-
-<table>
-  <thead>
-    <tr>
-      <th>이름</th>
-      <th>역할</th>
-      <th>담당 내용</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td nowrap="nowrap"><nobr>조&#8288;성&#8288;익</nobr></td>
-      <td nowrap="nowrap"><nobr>팀&#8288;장</nobr></td>
-      <td nowrap="nowrap"><nobr>프로젝트 일정 관리, 데이터 분석, baseline 모델 실험 및 앙상블, 오답 패턴 정리</nobr></td>
-    </tr>
-    <tr>
-      <td nowrap="nowrap"><nobr>장&#8288;민&#8288;주</nobr></td>
-      <td nowrap="nowrap"><nobr>팀&#8288;원</nobr></td>
-      <td nowrap="nowrap"><nobr>전체 솔루션 방향 제안, Qwen LoRA fine-tuning, DINO/SAM 기반 focus context 생성, 최종 파이프라인 구성</nobr></td>
-    </tr>
-    <tr>
-      <td nowrap="nowrap"><nobr>박&#8288;종&#8288;화</nobr></td>
-      <td nowrap="nowrap"><nobr>팀&#8288;원</nobr></td>
-      <td nowrap="nowrap"><nobr>보기 순서 TTA 실험, 모델별 예측 결과 비교(모델 선정), 프롬프트 엔지니어링</nobr></td>
-    </tr>
-    <tr>
-      <td nowrap="nowrap"><nobr>남&#8288;주&#8288;현</nobr></td>
-      <td nowrap="nowrap"><nobr>팀&#8288;원</nobr></td>
-      <td nowrap="nowrap"><nobr>주요 오답 패턴 정리, InternVL 비교 실험, qtype별 성능 분석 및 분류 기준 정리</nobr></td>
-    </tr>
-    <tr>
-      <td nowrap="nowrap"><nobr>고&#8288;은&#8288;찬</nobr></td>
-      <td nowrap="nowrap"><nobr>팀&#8288;원</nobr></td>
-      <td nowrap="nowrap"><nobr>오답 패턴 정리, 리더 보드 관리, 코드 버전 관리, 아이디어 제안</nobr></td>
-    </tr>
-  </tbody>
-</table>
-
-## 문제 정의
-
-대회 데이터는 재활용품 이미지와 질문/보기 쌍으로 구성됩니다.
-
-```text
-입력:
-- image
-- question
-- a, b, c, d choices
-
-출력:
-- answer: one of a, b, c, d
-```
-
-예시는 다음과 같습니다.
-
-```text
-질문: 바구니 속에 든 재활용품은 어떤 소재인가요?
-보기: a. 캔  b. 병  c. 플라스틱  d. 비닐
-정답: c
-```
-
-이 문제에서 어려웠던 부분은 다음 세 가지였습니다.
-
-- 보기 텍스트가 비슷하거나 질문 조건이 세밀하면 범용 VLM이 쉽게 헷갈립니다.
-- 개수(count), 재질(material), 분리배출(recycle) 유형은 이미지 전체보다 특정 객체를 정확히 보는 능력이 중요합니다.
-- 모델의 raw confidence만 믿으면 오답도 강하게 확신하는 경우가 있어, margin과 qtype별 취약점 분석이 필요했습니다.
-
-## 솔루션 구조
-
-최종 솔루션은 "강한 기본 모델을 만들고, 불확실한 문제만 비싼 추론으로 다시 본다"는 전략으로 설계했습니다.
+## Team Solution
 
 ```mermaid
-flowchart TD
-    START["문제 입력<br/>이미지 + 질문 + 보기 4개"] --> BASE["먼저 빠르게 답하기<br/>Qwen 기반 모델 2개가 각각 예측"]
-    BASE --> COMPARE["두 예측을 비교하기<br/>답, 확신도, 1·2위 점수 차이를 확인"]
-    COMPARE --> DECIDE{"충분히 확실한가?"}
-
-    DECIDE -- "예" --> KEEP["기본 답안 유지"]
-    DECIDE -- "아니오" --> SELECT["어려운 문제만 골라내기<br/>낮은 확신도 / 작은 점수 차이 / 취약한 질문 유형"]
-
-    SELECT --> PLAN["질문 의도 파악<br/>무엇을 물어보는지, 어디를 봐야 하는지 정리"]
-    PLAN --> FOCUS["이미지에서 필요한 부분 찾기<br/>객체 위치를 잡고 crop 이미지 생성"]
-    FOCUS --> RERUN["다시 자세히 답하기<br/>Qwen + InternVL + 탐지 결과를 함께 사용"]
-    RERUN --> REPLACE["필요한 답만 교체<br/>기본 답안보다 재검토 답안이 필요한 행만 반영"]
-
-    KEEP --> FINAL["최종 제출 파일<br/>final_submission.csv"]
-    REPLACE --> FINAL
-
-    BASE -.-> BASE_FILE["구현 파일<br/>train_qwen35_choice_ft_*.py"]
-    COMPARE -.-> MERGE_FILE["구현 파일<br/>build_margin_baseline_submission.py"]
-    SELECT -.-> SELECT_FILE["구현 파일<br/>prepare_rerun_subset.py"]
-    PLAN -.-> MULTI_FILE["구현 파일<br/>colab_three_pass_multistage.py<br/>multistage_vqa.py"]
-    REPLACE -.-> FINAL_FILE["구현 파일<br/>build_final_hybrid_submission.py"]
-
-    classDef input fill:#eef6ff,stroke:#4f8bc9,color:#10233f;
-    classDef process fill:#fff7e6,stroke:#d89022,color:#3b2600;
-    classDef decision fill:#fff1f1,stroke:#d95c5c,color:#3b1111;
-    classDef output fill:#edf8ef,stroke:#4d9b61,color:#11351a;
-    classDef file fill:#f6f6f6,stroke:#a0a0a0,color:#333,stroke-dasharray: 4 3;
-    class START input;
-    class BASE,COMPARE,SELECT,PLAN,FOCUS,RERUN,REPLACE process;
-    class DECIDE decision;
-    class KEEP,FINAL output;
-    class BASE_FILE,MERGE_FILE,SELECT_FILE,MULTI_FILE,FINAL_FILE file;
+flowchart LR
+    input["image + question<br/>four choices"] --> base["Qwen branches<br/>choice prediction"]
+    base --> compare["answer · confidence<br/>top-2 margin"]
+    compare --> gate{"review needed?"}
+    gate -- no --> keep["keep baseline"]
+    gate -- yes --> focus["question type<br/>object focus"]
+    focus --> detect["Grounding DINO<br/>SAM refinement"]
+    detect --> rerun["Qwen / InternVL<br/>selective rerun"]
+    rerun --> merge["qtype-aware merge"]
+    keep --> output["final submission"]
+    merge --> output
 ```
-
-## 핵심 아이디어
 
 ### 1. Choice-aware fine-tuning
 
-일반적인 생성형 loss로 답변 문장을 학습시키는 대신, 최종 출력이 a/b/c/d 중 하나라는 문제 구조를 적극 활용했습니다.
+- Qwen 기반 LoRA·QLoRA fine-tuning
+- 생성 문장 대신 `a/b/c/d` choice token을 직접 비교하는 loss 지원
+- 보기 순서를 shuffle해 특정 label 위치 암기 완화
+- 여러 choice order 결과를 결합하는 test-time augmentation
 
-- Qwen3.5 기반 LoRA/QLoRA 파인튜닝
-- 4개 보기 토큰에 대한 직접 cross-entropy(`choice_ce`) 지원
-- 보기 순서 셔플로 특정 라벨 위치에 과적합되는 현상 완화
-- validation/test에서 보기 순서를 바꿔 여러 번 추론하는 TTA 적용
+### 2. Confidence and margin gating
 
-### 2. Confidence와 margin 기반 보수적 앙상블
+두 branch가 다른 답을 낼 때 confidence 하나만 보지 않고 top-1과 top-2 점수 차이인
+`margin_top2`를 함께 기록했습니다. 대체 branch가 충분히 우세할 때만 baseline answer를
+교체하고, 선택된 branch와 근거 값은 meta CSV에 남겼습니다.
 
-두 개의 Qwen 예측 branch를 만들고, 단순 다수결이 아니라 `confidence`, `margin_top2`를 비교해 더 안정적인 답만 선택했습니다.
+### 3. Selective rerun
 
-- 기본 branch를 유지
-- 대체 branch가 충분히 높은 margin/confidence를 보일 때만 교체
-- 최종 제출 CSV와 별도로 meta CSV를 저장해 어떤 branch가 선택됐는지 추적
+모든 sample을 다시 처리하지 않고 다음 조건에 해당하는 문제만 재추론했습니다.
 
-### 3. 취약 qtype만 재추론
+- 낮은 confidence
+- 작은 top-2 margin
+- `count` 등 validation에서 확인된 취약 질문 유형
 
-모든 샘플에 무거운 멀티스테이지 추론을 적용하지 않고, count처럼 취약한 유형과 낮은 confidence/margin 샘플만 골라 재추론했습니다.
+### 4. Focus context
 
-- `support_conf_mean`, `support_margin_mean` 기반 subset 생성
-- test target answer를 참조하지 않는 answer-free selector
-- count 유형 중심으로 DINO/SAM과 InternVL 보강
+재검토 대상으로 선택된 image는 질문에서 요구하는 객체 후보를 Grounding DINO로 찾고,
+필요한 경우 SAM으로 영역을 보정했습니다. 원본 image와 focus context를 함께 사용해
+작은 객체를 다시 확인하도록 구성했습니다.
 
-### 4. DINO/SAM 기반 focus context
+## Troubleshooting
 
-질문에 필요한 객체를 먼저 찾고, 필요한 경우 crop/focus panel을 만들어 VLM이 작은 물체나 개수 조건을 더 잘 보도록 했습니다.
+### Confident but wrong predictions
 
-- Brain planner가 question type과 focus object를 추출
-- Grounding DINO로 객체 후보 박스 탐지
-- SAM으로 박스 refinement
-- 원본 이미지와 focus panel을 결합해 student VLM에 입력
+초기 모델은 틀린 답에도 높은 confidence를 보였습니다. 단일 threshold 대신 질문 유형,
+branch 일치 여부, confidence와 margin을 함께 기록해 재검토 대상을 정했습니다.
 
-### 5. Qwen/InternVL qtype별 가중 앙상블
+### Small-object count errors
 
-모델마다 잘하는 문제 유형이 달라서, qtype별로 Qwen과 InternVL의 가중치를 다르게 적용했습니다.
+전체 image만 보는 방식은 작은 재활용품을 놓쳤습니다. 취약한 `count` sample에만
+detection·crop context를 적용해 모델이 확인할 영역을 좁혔습니다.
 
-- count/dominant/location: InternVL 비중을 더 높게 설정
-- material/recycle/state/type: Qwen 비중을 더 높게 설정
-- detector prior는 count처럼 실제로 도움이 되는 유형에만 제한적으로 반영
+### Inference cost
 
-## 파일 구성
+검출기와 여러 VLM을 모든 sample에 적용하는 방식은 비효율적이었습니다. 가벼운 baseline을
+먼저 실행하고 불확실한 문제만 multi-stage path로 보내는 cascade 구조를 선택했습니다.
 
-| 파일 | 역할 |
-| --- | --- |
-| `train_qwen35_choice_ft_prompt.py` | Qwen3.5 choice-aware LoRA 학습 및 test inference |
-| `train_qwen35_choice_ft_ori_prompt.py` | 원본 prompt branch용 Qwen3.5 학습 및 추론 |
-| `internvl_baseline.py` | InternVL LoRA baseline 및 confidence 추출 |
-| `multistage_vqa.py` | Brain planner, Grounding DINO, SAM, Qwen/InternVL student ensemble 핵심 모듈 |
-| `colab_three_pass_multistage.py` | Colab 환경에서 brain/context/student 3-pass 재추론 실행 |
-| `build_margin_baseline_submission.py` | 두 예측 branch를 margin/confidence 기준으로 보수 병합 |
-| `prepare_rerun_subset.py` | 불확실한 qtype/sample만 재추론 대상으로 선택 |
-| `build_final_hybrid_submission.py` | baseline과 rerun 결과를 결합해 최종 제출 파일 생성 |
+### Choice-order bias
 
-## 실행 환경
+보기 위치가 바뀌면 예측도 달라지는 현상을 줄이기 위해 training shuffle과 inference TTA를
+실험했습니다. 최종 answer뿐 아니라 branch별 prediction metadata도 저장해 판단을 추적했습니다.
 
-GPU 환경에서는 PyTorch 설치 방식이 다를 수 있으므로, 먼저 환경에 맞는 PyTorch를 설치한 뒤 나머지 패키지를 설치하는 것을 권장합니다.
+## Code Map
+
+| File | Role |
+|---|---|
+| `train_qwen35_choice_ft_prompt.py` | choice-aware Qwen LoRA training and inference |
+| `train_qwen35_choice_ft_ori_prompt.py` | alternate prompt branch |
+| `internvl_baseline.py` | InternVL comparison baseline |
+| `build_margin_baseline_submission.py` | confidence·margin 기반 branch merge |
+| `prepare_rerun_subset.py` | answer-free selective rerun sample selection |
+| `multistage_vqa.py` | planner, detection, focus context and student ensemble |
+| `colab_three_pass_multistage.py` | multi-stage Colab runner |
+| `build_final_hybrid_submission.py` | baseline과 rerun 결과 최종 결합 |
+
+## Run
+
+GPU와 CUDA 환경에 맞는 PyTorch를 먼저 설치한 뒤 나머지 package를 설치합니다.
 
 ```bash
 pip install -r requirements.txt
 ```
 
-예상 데이터 형식은 다음과 같습니다.
+Expected data layout:
 
 ```text
 project_root/
@@ -241,20 +148,10 @@ project_root/
   images/
 ```
 
-`train.csv`는 최소한 `id`, `path`, `question`, `a`, `b`, `c`, `d`, `answer` 컬럼을 포함해야 합니다. `test.csv`는 `answer`를 제외한 동일한 입력 컬럼을 사용합니다.
+`train.csv`는 `id`, `path`, `question`, `a`, `b`, `c`, `d`, `answer`를,
+`test.csv`는 answer를 제외한 동일 column을 포함합니다.
 
-## 실행 방법
-
-### 1. Qwen branch 학습 및 추론
-
-```bash
-python train_qwen35_choice_ft_ori_prompt.py \
-  --project-root /path/to/project \
-  --train-csv /path/to/train.csv \
-  --test-csv /path/to/test.csv \
-  --image-root /path/to/project \
-  --output-dir /path/to/ori_prompt_run
-```
+Example workflow:
 
 ```bash
 python train_qwen35_choice_ft_prompt.py \
@@ -262,33 +159,8 @@ python train_qwen35_choice_ft_prompt.py \
   --train-csv /path/to/train.csv \
   --test-csv /path/to/test.csv \
   --image-root /path/to/project \
-  --output-dir /path/to/prompt_run
-```
+  --output-dir /path/to/qwen_run
 
-각 branch는 다음 파일을 생성합니다.
-
-- `test_predictions_detailed.csv`
-- `submission.csv`
-
-`test_predictions_detailed.csv`에는 최종 병합에 필요한 `id`, `answer`, `confidence`, `margin_top2`가 포함됩니다.
-
-### 2. Baseline submission 생성
-
-```bash
-python build_margin_baseline_submission.py \
-  --primary-csv /path/to/ori_prompt_run/test_predictions_detailed.csv \
-  --secondary-csv /path/to/prompt_run/test_predictions_detailed.csv \
-  --output-csv /path/to/baseline_submission.csv \
-  --meta-csv /path/to/baseline_submission_meta.csv \
-  --prefer-source primary \
-  --min-margin-top2 0.90 \
-  --min-margin-gap 0.02 \
-  --min-confidence-gap 0.01
-```
-
-### 3. Rerun subset 생성
-
-```bash
 python prepare_rerun_subset.py \
   --test-csv /path/to/test.csv \
   --signal-csv /path/to/signal.csv \
@@ -297,72 +169,29 @@ python prepare_rerun_subset.py \
   --qtypes count \
   --conf-threshold 0.88 \
   --margin-threshold 0.50
-```
 
-### 4. DINO/SAM multistage 재추론
-
-```bash
-python colab_three_pass_multistage.py \
-  --project-root /path/to/project \
-  --source test \
-  --html-subset /path/to/rerun_subset.csv \
-  --subset-ids-path /path/to/rerun_subset_ids.txt \
-  --subset-tag rerun_subset \
-  --adapter-path /path/to/qwen_adapter \
-  --enable-sam \
-  --force-rerun-student \
-  --batch-save-every 10
-```
-
-InternVL student를 함께 사용할 경우:
-
-```bash
-python colab_three_pass_multistage.py \
-  --project-root /path/to/project \
-  --source test \
-  --html-subset /path/to/rerun_subset.csv \
-  --subset-ids-path /path/to/rerun_subset_ids.txt \
-  --subset-tag rerun_subset \
-  --adapter-path /path/to/qwen_adapter \
-  --enable-internvl \
-  --internvl-adapter-path /path/to/internvl_adapter \
-  --enable-sam \
-  --force-rerun-student
-```
-
-주요 산출물:
-
-- `{tag}_brain_plan.csv`
-- `{tag}_context_summary.csv`
-- `{tag}_detections.csv`
-- `{tag}_crops.csv`
-- `{tag}_predictions_full.csv`
-- `{tag}_answer.csv`
-
-### 5. Final hybrid submission 생성
-
-```bash
 python build_final_hybrid_submission.py \
   --baseline-csv /path/to/baseline_submission.csv \
-  --rerun-predictions-csv /path/to/rerun_subset_predictions_full.csv \
+  --rerun-predictions-csv /path/to/rerun_predictions.csv \
   --signal-csv /path/to/signal.csv \
-  --output-csv /path/to/final_submission.csv \
-  --meta-csv /path/to/final_submission_meta.csv \
-  --qtypes count \
-  --conf-threshold 0.88 \
-  --margin-threshold 0.50
+  --output-csv /path/to/final_submission.csv
 ```
 
-## 회고
+각 script의 전체 option은 `--help`에서 확인할 수 있습니다.
 
-이 대회에서 가장 효과적이었던 지점은 모델을 무조건 크게 만드는 것이 아니라, 문제의 실패 양상을 관찰하고 그에 맞게 추론 비용을 배분한 것입니다.
+## Team
 
-- 생성형 답변보다 4지선다 구조를 직접 학습하는 방식이 안정적이었습니다.
-- 보기 순서 셔플과 TTA는 라벨 위치 편향을 줄이는 데 도움이 됐습니다.
-- count 유형은 VLM 단독보다 detector prior와 InternVL 보조가 더 강했습니다.
-- DINO/SAM은 모든 문제에 쓰기보다 qtype과 confidence를 기준으로 제한 적용할 때 효율이 좋았습니다.
-- 최종 성능은 단일 모델보다 error analysis, prompt 설계, confidence calibration, selective rerun의 조합에서 나왔습니다.
+| Member | Role |
+|---|---|
+| 조성익 | 팀장, 일정 관리, data analysis, baseline·ensemble, error review |
+| 장민주 | solution direction, Qwen fine-tuning, DINO·SAM focus context, integration |
+| 박종화 | choice-order TTA, prediction comparison, prompt engineering |
+| **남주현** | **error pattern review, InternVL comparison, qtype analysis** |
+| 고은찬 | error review, leaderboard·version management, idea review |
 
-## 공개 범위
+## Public Scope
 
-이 저장소에는 포트폴리오 공개를 위해 소스 코드와 실행 흐름만 포함했습니다. 대회 원본 데이터, 모델 checkpoint, adapter weight, 제출 산출물 CSV는 용량과 라이선스 문제로 포함하지 않습니다.
+원본 대회 데이터, model checkpoint, adapter weight와 제출 CSV는 license와 용량 문제로
+공개하지 않습니다. 저장소는 재현 가능한 source structure와 decision flow를 중심으로
+구성했습니다. leaderboard score는 팀의 최종 결과이며 개인 기여 범위는 위 표와 같이
+분리해 기록합니다.
