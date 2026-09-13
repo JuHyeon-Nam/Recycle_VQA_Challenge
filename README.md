@@ -10,7 +10,7 @@ multimodal VQA 프로젝트입니다. SSAFY 15기 2회차 AI Challenge에서
 ![InternVL](https://img.shields.io/badge/InternVL-comparison-0B7285?style=flat-square)
 ![Grounding DINO](https://img.shields.io/badge/Grounding%20DINO-detection-2F9E44?style=flat-square)
 
-[전체 포트폴리오](https://github.com/JuHyeon-Nam/JuHyeon-Nam-archive)
+[GitHub 프로필](https://github.com/JuHyeon-Nam)
 
 ## Result
 
